@@ -25,3 +25,16 @@ Unpack it and put it in (e.g.) `~/bin/FastQC`, then make it accessible:
 `ln -s ~/bin/FastQC/fastqc ./fastqc`
 
 `conda install trim-galore`
+
+3. Install Bismark & requirements (including Bowtie2)
+
+`conda install bowtie2`
+
+`conda install bismark`
+
+
+Probably needed?
+
+`conda install samtools`
+
+`conda install pysam`
