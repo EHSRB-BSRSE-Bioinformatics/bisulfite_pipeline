@@ -32,6 +32,19 @@ Unpack it and put it in (e.g.) `~/bin/FastQC`, then make it accessible:
 
 `conda install bismark`
 
+4. Install methylKit
+
+(in R)
+
+`if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("methylKit")`
+
+5. Install MultiQC
+
+`conda install multiqc`
+
 
 Probably needed?
 

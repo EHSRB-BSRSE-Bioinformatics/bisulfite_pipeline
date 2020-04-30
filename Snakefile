@@ -4,38 +4,69 @@ import pandas as pd
 from glob import glob
 import pathlib
 
-configfile: "config.yaml"
+config_file_name = "config.yaml"
 
-SAMPLES_WT = pd.read_csv("metadata.csv").query('desc == "WT"')["SRR"].values
-SAMPLES_TKO = pd.read_csv("metadata.csv").query('desc == "TKO"')["SRR"].values
-SAMPLES = SAMPLES_WT.tolist() + SAMPLES_TKO.tolist()
+configfile: config_file_name
 
-print("WT samples: ")
-print(SAMPLES_WT)
-print("TKO samples: ")
-print(SAMPLES_TKO)
+print("config file: " + config_file_name)
 
+# set up conditions and samples
+sample_info = config["samples"]
+
+SAMPLES = sum([i.split(" ") for i in list(sample_info.values())], [])
+CONDITIONS = list(sample_info.keys())
+
+print("conditions: " + str(CONDITIONS))
+print("samples: " + str(SAMPLES))
+
+# set up directories
 root = Path("/")
 
-project_root = Path(config["project_dir"])
+genome_dir = root / config["genome_root_dir"] / config["genome"]
+
+input_dir = Path(config["input_dir"])
+output_dir = Path(config["output_dir"])
+
+trim_dir = output_dir / "trimmed"
+align_dir = output_dir / "aligned"
+log_dir = output_dir / "logs"
+
+print("using genome: " + str())
+
+print("input dir: " + str(input_dir))
+print("output dir: " + str(output_dir))
+
+print("trimmed sequences dir: " + str(trim_dir))
+print("alignments dir: " + str(align_dir))
+print("snakemake log dir: " + str(log_dir))
+
+shell("cp -f Snakefile {log_dir}")
+shell("cp -f {config_file_name} {log_dir}")
+
+# run whole pipeline
+
+rule all:
+    input:
+        expand(str(trim_dir / "{sample}_trimmed.fq.gz"), sample=SAMPLES),
+        expand(str(align_dir / "{sample}_trimmed_bismark_bt2.bam"), sample=SAMPLES),
+        output_dir / "multiqc_report.html",
+
+# sequence trimming
 
 rule trim_galore_all:
-    message: "running trim galore on all samples"
     input:
-        expand(str(project_root / "trimmed/{sample}_1_val_1.fq.gz"), sample=SAMPLES),
-        expand(str(project_root / "trimmed/{sample}_2_val_2.fq.gz"), sample=SAMPLES)
+        expand(str(trim_dir / "{sample}_trimmed.fq.gz"), sample=SAMPLES)
 
 rule trim_galore:
-    message: "running trim galore for sample"
     input:
-        pair1 = str(project_root / "fastq" / "{sample}_1.fastq.gz"),
-        pair2 = str(project_root / "fastq" / "{sample}_2.fastq.gz")
+        input_dir / "{sample}.fastq.gz"
     output: 
-        project_root / "trimmed" / "{sample}_1_val_1.fq.gz",
-        project_root / "trimmed" / "{sample}_2_val_2.fq.gz"
+        trim_dir / "{sample}_trimmed.fq.gz"
     run:
-        output_dir = str(project_root / "trimmed")
-        shell("trim_galore --illumina --rrbs --paired -q 20 --output_dir {output_dir} {input.pair1} {input.pair2}")
+        shell("trim_galore --illumina --rrbs -q 20 --output_dir {trim_dir} {input}")
+
+
+# alignment with bismark
 
 # note: if this fails with a cryptic bowtie error, try running the bowtie2-build jobs directly:
 # cd config["genome_root_dir"] / config["genome"] / Bisulfite_Genome/CT_conversion
@@ -45,40 +76,41 @@ rule trim_galore:
 rule bismark_index:
     message: "running bismark_genome_preparation"
     input:
-        ancient(root / config["genome_root_dir"] / config["genome"] )
+        ancient(genome_dir)
+    output:
+        genome_dir / "Bisulfite_Genome"
     shell:
-        "bismark_genome_preparation {input}"
+        "bismark_genome_preparation {genome_dir}"
 
 rule bismark_all:
     message: "running bismark on all samples"
     input:
-        expand(str(project_root / "aligned/{sample}_1_val_1_bismark_bt2_pe.bam"), sample=SAMPLES),
-
+        expand(str(align_dir / "{sample}_trimmed_bismark_bt2.bam"), sample=SAMPLES),
 
 rule bismark:
-    message: "running bismark"
     input:
-        pair1 = str(project_root / "trimmed" / "{sample}_1_val_1.fq.gz"),
-        pair2 = str(project_root / "trimmed" / "{sample}_2_val_2.fq.gz"),
+        genome_dir / "Bisulfite_Genome",
+        pair1 = str(trim_dir / "{sample}_trimmed.fq.gz")
     output:
-        project_root / "aligned" / "{sample}_1_val_1_bismark_bt2_pe.bam"
+        align_dir / "{sample}_trimmed_bismark_bt2.bam"
     run:
-        genome_dir = str(root / config["genome_root_dir"] / config["genome"])
-        output_dir = str(project_root / "aligned")
-        shell("bismark --output_dir {output_dir} {genome_dir} -1 {input.pair1} -2 {input.pair2}")
+        shell("bismark --output_dir {align_dir} {genome_dir} {input.pair1}")
 
-# rule bowtie_se:
-#     input:
-#         dir=ancient("ReadData/{sample}/")
-#     output:
-#         "ReadData/{sample}/{sample}_Bowtie_{DB,[A-Za-z0-9]+}.sam"
-#     params:
-#         DB_data = config["DB_data"], DB = config["DB"], N_MISMATCH = config["n_mismatch"]
-#     run:
-#         infiles = glob("%s/*_1.fastq.gz" %(input)) # Only the forward read
-#         shell("bowtie2 -a -N {params.N_MISMATCH} -x {params.DB_data} -U <(zcat %s) | awk -F \"\\t\" '$3 != \"*\"' > {output}" %(infiles[0]))
+# multiqc
 
+rule multiqc:
+    message: "running multiqc"
+    input:
+        expand(str(align_dir / "{sample}_trimmed_bismark_bt2.bam"), sample=SAMPLES),
+        expand(str(trim_dir / "{sample}_trimmed.fq.gz"), sample=SAMPLES)
+    output:
+        output_dir / "multiqc_report.html"
+    run:
+        shell("multiqc -fz {input_dir} {trim_dir} {align_dir}")
+        shell("mv multiqc_report.html multiqc_data.zip {output_dir}")
 
-# rule bowtie_se_all:
-#     input:
-#         expand("ReadData/{sample}/{sample}_Bowtie_Sub_se_{DB}.sam", sample = SAMPLES, DB = config["DB"]),
+# stats via methylkit
+
+rule methylkit:
+    script:
+        "./run_methylkit.R"

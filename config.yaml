@@ -1,5 +1,22 @@
-project_dir: /home/katecook/Documents/HC_EHSRB/projects/ddesaulniers_methylation
-genome: GRCm38
+input_dir: /media/hdd1/DesaulniersLab/RRBS_des/phase1/raw
+
+output_dir: /home/katecook/Documents/HC_EHSRB/projects/ddesaulniers_methylation/phase1
 
 genome_root_dir: /home/katecook/Documents/genomes
+genome: MesAur1.0
 
+samples:
+  untreated_primary:
+    MT2_1_S5_R1_001
+    MT2_2_S6_R1_001
+    MT2_3_S7_R1_001
+    MT2_4_S8_R1_001
+  vehicle:
+    MT2_5_S9_R1_001
+    MT2_6_S10_R1_001
+    MT2_7_S11_R1_001
+    S3_11_S3_R1_001
+  treated:
+    S3_12_S4_R1_001
+    S3_7_S1_R1_001
+    S3_9_S2_R1_001
