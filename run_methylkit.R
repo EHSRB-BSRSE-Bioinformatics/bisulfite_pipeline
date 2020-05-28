@@ -75,7 +75,7 @@ genes = sort(genes(transcript.db))
 transcript = sort(transcripts(transcript.db))
 intergenic = gaps(genes)
 introns = sort(unlist(intronsByTranscript(transcript.db)))
-promoters = sort(promoters(transcript.db, upstream=1000, downstream=1000))
+promoters = sort(promoters(transcript.db, upstream=1500, downstream=1000))
 tss = sort(promoters(transcript.db, upstream=0, downstream=1))
 
 annotation.all.features=GRangesList(genes=genes,
