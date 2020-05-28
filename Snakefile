@@ -1,5 +1,4 @@
 import re
-import os
 import pandas as pd
 from glob import glob
 import pathlib
@@ -28,20 +27,38 @@ input_dir = Path(config["input_dir"])
 output_dir = Path(config["output_dir"])
 
 trim_dir = output_dir / "trimmed"
+fastqc_dir = output_dir / "fastqc"
 align_dir = output_dir / "aligned"
+procesed_dir = output_dir / "processed"
 log_dir = output_dir / "logs"
 
-print("using genome: " + str())
+output_dir.mkdir(parents=True, exist_ok=True)
+trim_dir.mkdir(parents=True, exist_ok=True)
+fastqc_dir.mkdir(parents=True, exist_ok=True)
+align_dir.mkdir(parents=True, exist_ok=True)
+procesed_dir.mkdir(parents=True, exist_ok=True)
+log_dir.mkdir(parents=True, exist_ok=True)
+
+print("using genome: " + str(genome_dir))
 
 print("input dir: " + str(input_dir))
 print("output dir: " + str(output_dir))
 
 print("trimmed sequences dir: " + str(trim_dir))
+print("fastqc dir: " + str(fastqc_dir))
 print("alignments dir: " + str(align_dir))
 print("snakemake log dir: " + str(log_dir))
 
-shell("cp -f Snakefile {log_dir}")
-shell("cp -f {config_file_name} {log_dir}")
+shell("cp -rf Snakefile {log_dir}")
+shell("cp -rf {config_file_name} {log_dir}")
+
+# gene names file, needed for annotation
+
+rule gene_names:
+    input: genome_dir / config["annotation_filename"]
+    output: genome_dir / "geneid_to_name.txt"
+    run:
+        shell("zcat {input} | awk 'BEGIN{FS=\"\t\"}{split($9,a,\";\"); if($3~\"gene\") print) a[1]\"\t\"a[3]}' | sed 's/gene_source \"ensembl\"//' | tr ' ' '\t' | cut -f 2,5 | tr -d '\"' > {output}")
 
 # run whole pipeline
 
@@ -50,18 +67,21 @@ rule all:
         expand(str(trim_dir / "{sample}_trimmed.fq.gz"), sample=SAMPLES),
         expand(str(align_dir / "{sample}_trimmed_bismark_bt2.bam"), sample=SAMPLES),
         output_dir / "multiqc_report.html",
+    log: log_dir / "all.log"
 
 # sequence trimming
 
 rule trim_galore_all:
     input:
         expand(str(trim_dir / "{sample}_trimmed.fq.gz"), sample=SAMPLES)
+    log: log_dir / "trim_galore_all.log"
 
 rule trim_galore:
     input:
         input_dir / "{sample}.fastq.gz"
     output: 
         trim_dir / "{sample}_trimmed.fq.gz"
+    log: log_dir / "trim_galore.{sample}.log"
     run:
         shell("trim_galore --illumina --rrbs -q 20 --output_dir {trim_dir} {input}")
 
@@ -79,6 +99,7 @@ rule bismark_index:
         ancient(genome_dir)
     output:
         genome_dir / "Bisulfite_Genome"
+    log: log_dir / "bismark_index.log"
     shell:
         "bismark_genome_preparation {genome_dir}"
 
@@ -86,31 +107,63 @@ rule bismark_all:
     message: "running bismark on all samples"
     input:
         expand(str(align_dir / "{sample}_trimmed_bismark_bt2.bam"), sample=SAMPLES),
+    log: log_dir / "bismark_all.log"
 
 rule bismark:
     input:
-        genome_dir / "Bisulfite_Genome",
+        ancient(genome_dir / "Bisulfite_Genome"),
         pair1 = str(trim_dir / "{sample}_trimmed.fq.gz")
     output:
         align_dir / "{sample}_trimmed_bismark_bt2.bam"
+    log: log_dir / "bismark.{sample}.log"
     run:
         shell("bismark --output_dir {align_dir} {genome_dir} {input.pair1}")
+
+rule bismark_extract_methylation:
+    input:
+        align_dir / "{sample}_trimmed_bismark_bt2.bam"
+    output:
+        procesed_dir / "{sample}_trimmed_bismark_bt2.CpG_report.txt.gz"
+    log: log_dir / "bismark_methylextract.{sample}.log"
+    run:
+        shell("bismark_methylation_extractor -s --gazillion --bedGraph --buffer_size 10G --cytosine_report --genome_folder {genome_dir} --gzip --output {procesed_dir} {input}")
+
+# fastqc
+
+rule fastqc_all:
+    input:
+        expand(str(fastqc_dir / "{sample}_fastqc.zip"), sample=SAMPLES)
+
+rule fastqc:
+    input:
+        input_dir / "{sample}.fastq.gz"
+    output: 
+        fastqc_dir / "{sample}_fastqc.zip"
+    run:
+        shell("fastqc -o {fastqc_dir} {input}")
+
 
 # multiqc
 
 rule multiqc:
     message: "running multiqc"
     input:
-        expand(str(align_dir / "{sample}_trimmed_bismark_bt2.bam"), sample=SAMPLES),
-        expand(str(trim_dir / "{sample}_trimmed.fq.gz"), sample=SAMPLES)
+        expand(str(fastqc_dir / "{sample}_fastqc.zip"), sample=SAMPLES),
+        expand(str(trim_dir / "{sample}_trimmed.fq.gz"), sample=SAMPLES),
+        expand(str(align_dir / "{sample}_trimmed_bismark_bt2.bam"), sample=SAMPLES)
     output:
         output_dir / "multiqc_report.html"
+    log: log_dir / "multiqc.log"
     run:
-        shell("multiqc -fz {input_dir} {trim_dir} {align_dir}")
+        shell("multiqc -fz {input_dir} {trim_dir} {align_dir} {fastqc_dir}")
         shell("mv multiqc_report.html multiqc_data.zip {output_dir}")
 
 # stats via methylkit
 
 rule methylkit:
+    input:
+        genome_dir / "geneid_to_name.txt",
+        expand(str(procesed_dir / "{sample}_trimmed_bismark_bt2.CpG_report.txt.gz"), sample=SAMPLES)
+    log: log_dir / "methylkit.log"
     script:
         "./run_methylkit.R"

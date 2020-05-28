@@ -3,7 +3,8 @@ input_dir: /media/hdd1/DesaulniersLab/RRBS_des/phase1/raw
 output_dir: /home/katecook/Documents/HC_EHSRB/projects/ddesaulniers_methylation/phase1
 
 genome_root_dir: /home/katecook/Documents/genomes
-genome: MesAur1.0
+genome: MesAur1.0_ensembl
+annotation_filename: Mesocricetus_auratus.MesAur1.0.100.gtf.gz
 
 samples:
   untreated_primary:
@@ -15,8 +16,41 @@ samples:
     MT2_5_S9_R1_001
     MT2_6_S10_R1_001
     MT2_7_S11_R1_001
-    S3_11_S3_R1_001
   treated:
     S3_12_S4_R1_001
     S3_7_S1_R1_001
     S3_9_S2_R1_001
+    S3_11_S3_R1_001
+
+samples_phase2:
+  vehicle:
+    poolCol_17_S21_R1_001
+    poolCol_18_S22_R1_001
+    poolCol_19_S23_R1_001
+    poolCol_20_S24_R1_001
+  pooled:
+    pcBAP_21_S17_R1_001
+    pcBAP_22_S18_R1_001
+    pcBAP_23_S19_R1_001
+    pcBAP_24_S20_R1_001
+  senescent:
+    c2Senes_1_S4_R1_001
+    c2Senes_2_S1_R1_001
+    c2Senes_3_S2_R1_001
+    c2Senes_4_S3_R1_001
+  senescence_bypass:
+    c2SenesBp_5_S6_R1_001
+    c2SenesBp_6_S5_R1_001
+    c2SenesBp_7_S8_R1_001
+    c2SenesBp_8_S7_R1_001
+  normal_colony:
+    expNCol_13_S13_R1_001
+    expNCol_14_S14_R1_001
+    expNCol_15_S15_R1_001
+    expNCol_16_S16_R1_001
+  mt_colony:
+    expMTCol_9_S12_R1_001
+    expMTCol_10_S9_R1_001
+    expMTCol_11_S10_R1_001
+    expMTCol_12_S11_R1_001
+
