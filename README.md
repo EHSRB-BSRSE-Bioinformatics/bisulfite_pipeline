@@ -66,6 +66,7 @@ Note that methylKit version >=1.14.1 is required. 1.14.0 in particular had a bug
 
 Important note: the genome and annotation should use the same chromosome/contig naming convention.
 
+3. Download ortholog data (e.g. hamster_mouse_orthologs.txt) from Ensembl via BioMart.
 
 # notes
 

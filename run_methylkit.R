@@ -46,7 +46,7 @@ conditions = sample_df$condition
 treatment_vector = as.numeric(as.factor(conditions))
 sample_df$treatment = treatment_vector
 all_samples = sample_df$sample
-sample_names = as.character(sample_df$name)
+sample_names = as.character(sample_df$sample)
 
 message("Running on samples")
 message(paste(all_samples, sep=", "))
@@ -153,13 +153,19 @@ meth.mat = mat[, meth@numCs.index]/ (mat[,meth@numCs.index] + mat[,meth@numTs.in
 names(meth.mat) = meth@sample.ids
 pca_obj = prcomp(meth.mat)
 pca_df = data.frame(pca_obj$rotation) %>%
-    rownames_to_column(var = "name") %>%
+    rownames_to_column(var = "sample") %>%
     left_join(sample_df)
 p = ggplot(pca_df, aes(x=PC1,y=PC2, colour=condition)) +
     geom_point() +
-    geom_text_repel(aes(label=name)) +
+    geom_text_repel(aes(label=sample)) +
     theme_bw()
 ggsave(outfile, p)
+outfile2 = file.path(output_dir, "sample_PCA_names.pdf")
+p2 = ggplot(pca_df, aes(x=PC1,y=PC2, colour=condition)) +
+    geom_point() +
+    geom_text_repel(aes(label=name)) +
+    theme_bw()
+ggsave(outfile2, p2)
 rm(mat)
 
 ################################################################
@@ -167,6 +173,7 @@ rm(mat)
 message("Performing tiling analysis")
 tiles = tileMethylCounts(methRaw, win.size=200, step.size=200)
 tiles.united = methylKit::unite(tiles)
+#tiles.united = readMethylDB('/home/katecook/Documents/HC_EHSRB/projects/ddesaulniers_methylation/phase1/rdata/methylBase_16ea322a944.txt.bgz')
 
 ######
 
@@ -182,8 +189,8 @@ for (row in 1:nrow(pairs_df)) {
     message(condition_1)
     message(condition_2)
     df_subset = sample_df %>% filter(condition == condition_1 | condition == condition_2)
-    meth_subset = reorganize(meth, df_subset$name, df_subset$treatment)
-    # tiles_subset = reorganize(tiles.united, df_subset$name, df_subset$treatment)
+    meth_subset = reorganize(meth, df_subset$sample, df_subset$treatment)
+    tiles_subset = reorganize(tiles.united, df_subset$sample, df_subset$treatment)
 
     message("Calculating differentially methylated bases")
     myDiff = calculateDiffMeth(meth_subset, overdispersion="MN", test="Chisq", mc.cores=8, chunk.size=1e5)
@@ -193,7 +200,7 @@ for (row in 1:nrow(pairs_df)) {
     diffAnn25p = annotateWithGeneParts(as(myDiff25p,"GRanges"), annotation.all.features)
 
     pdf(sprintf("annotationPercentages_%s_vs_%s_.p25q0.01.pdf", condition_1, condition_2))
-        genomation::plotTargetAnnotation(diffAnn25p,precedence=TRUE, main=sprintf("%s vs %s annotation (25% changed, q<0.01)", condition_1, condition_2))
+        genomation::plotTargetAnnotation(diffAnn25p,precedence=TRUE, main=sprintf("%s vs %s annotation (25%% changed, q<0.01)", condition_1, condition_2))
     dev.off()
 
     message("Calculating differentially methylated tiles")
@@ -202,7 +209,7 @@ for (row in 1:nrow(pairs_df)) {
 
     message("Exporting differential analysis data")
     
-    # raw data
+    # by site
     diffAnn.data = getAssociationWithTSS(diffAnn) %>%
         rownames_to_column(var = "rowid") %>%
         mutate(transcript_id = gsub("\\..*","",rowid))
@@ -220,17 +227,17 @@ for (row in 1:nrow(pairs_df)) {
     all_meth_data = diffAnn.data %>%
         left_join(all_gene_data, by=c("transcript_id" = "TXNAME")) %>%
         left_join(myDiff.withrows, by=c("target.row" = "rowid")) %>%
-        filter(qvalue < 0.01 & abs(meth.diff) > 25) %>%
+        # filter(qvalue < 0.01 & abs(meth.diff) > 25) %>%
         dplyr::select(chr, start, end, gene_id, transcript_id, gene_name, dist_to_feature = dist.to.feature, pvalue, qvalue, meth.diff)
 
-    all_meth_output_file = sprintf(sprintf("differential_methylation_%s_vs_%s_p25q0.01.txt", condition_1, condition_2))
+    all_meth_output_file = sprintf(sprintf("differential_methylation_%s_vs_%s_unfiltered.txt", condition_1, condition_2))
     message(sprintf("Writing output to %s", all_meth_output_file))
     write.table(all_meth_data, all_meth_output_file, sep="\t", row.names=FALSE, quote=FALSE)
 
     all_meth_data$comparison = sprintf("%s_vs_%s", condition_1, condition_2)
     datalist[[row]] = all_meth_data
 
-    # tiling data
+    # by tile
     message("Exporting tiled data")
     tileDiffAnn.data = getAssociationWithTSS(tileDiffAnn) %>%
         rownames_to_column(var = "rowid") %>%
@@ -249,10 +256,10 @@ for (row in 1:nrow(pairs_df)) {
     all_tiling_data = tileDiffAnn.data %>%
         left_join(all_gene_data, by=c("transcript_id" = "TXNAME")) %>%
         left_join(tileDiff.withrows, by=c("target.row" = "rowid")) %>%
-        filter(qvalue < 0.01) %>%
+        #filter(qvalue < 0.01) %>%
         dplyr::select(chr, start, end, gene_id, transcript_id, gene_name, dist_to_feature = dist.to.feature, pvalue, qvalue, meth.diff)
 
-    tiled_output_file = sprintf(sprintf("differential_methylation_tiled_%s_vs_%s_p25q0.01.txt", condition_1, condition_2))
+    tiled_output_file = sprintf(sprintf("differential_methylation_tiled_%s_vs_%s_unfiltered.txt", condition_1, condition_2))
     message(sprintf("Writing tiled output to %s", tiled_output_file))
     write.table(all_tiling_data, tiled_output_file, sep="\t", row.names=FALSE, quote=FALSE)
 
@@ -269,13 +276,13 @@ compare_comparisons = all_comparison_data %>%
     dplyr::select(chr,start,end,gene_id,transcript_id,gene_name,dist_to_feature,qvalue,meth.diff,comparison) %>%
     pivot_wider(names_from=c(comparison),values_from=c(qvalue,meth.diff))
 
-write.table(compare_comparisons, "all_comparisons_p25q0.01.txt", sep="\t", row.names=FALSE, quote=FALSE)
+write.table(compare_comparisons, "all_comparisons_unfiltered.txt", sep="\t", row.names=FALSE, quote=FALSE)
 
 compare_tiling_comparisons = all_tiling_comparison_data %>%
     dplyr::select(chr,start,end,gene_id,transcript_id,gene_name,dist_to_feature,qvalue,meth.diff,comparison) %>%
     pivot_wider(names_from=c(comparison),values_from=c(qvalue,meth.diff))
 
-write.table(compare_tiling_comparisons, "all_tiling_comparisons_q0.01.txt", sep="\t", row.names=FALSE, quote=FALSE)
+write.table(compare_tiling_comparisons, "all_tiling_comparisons_unfiltered.txt", sep="\t", row.names=FALSE, quote=FALSE)
 
 
 message("Saving workspace")
