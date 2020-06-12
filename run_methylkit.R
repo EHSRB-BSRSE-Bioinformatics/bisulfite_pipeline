@@ -99,7 +99,7 @@ methRaw = methRead(location = processed_file_list,
                 treatment   = treatment_vector,
                 assembly    = genome,
                 context     = "CpG",
-                mincov      = 10,
+                mincov      = 20,
                 pipeline    = "bismarkCytosineReport",
                 header      = FALSE,
                 skip        = 0,
@@ -119,7 +119,7 @@ for (i in seq_along(all_samples)) {
 dev.off()
 
 message("Filtering samples based on read coverage")
-methFiltered=filterByCoverage(methRaw, lo.count=10, lo.perc=NULL, hi.count=NULL, hi.perc=99.9, save.db=FALSE)
+methFiltered=filterByCoverage(methRaw, lo.count=20, lo.perc=NULL, hi.count=NULL, hi.perc=99.9, save.db=FALSE)
 
 message("Normalizing samples based on read coverage")
 methNormalized = normalizeCoverage(methFiltered)
